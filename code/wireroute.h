@@ -13,6 +13,11 @@ typedef struct bend{
     int y;
 } bend_t;
 
+typedef struct totalCost {
+    int maxValue;
+    int cost;
+} total_cost_t;
+
 typedef struct { /* Define the data structure for wire here */
     int start_x;
     int start_y;
