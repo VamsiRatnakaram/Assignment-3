@@ -8,7 +8,18 @@
 
 #include <omp.h>
 
+typedef struct bend{
+    int x;
+    int y;
+} bend_t;
+
 typedef struct { /* Define the data structure for wire here */
+    int start_x;
+    int start_y;
+    int end_x;
+    int end_y;
+    int numBends;
+    bend_t bend[2];
 } wire_t;
 
 typedef int cost_t;
