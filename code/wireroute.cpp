@@ -148,7 +148,7 @@ static void updateCosts(wire_t old_wire, wire_t new_wire, int *costs,int dim_x, 
     update_route(new_wire,costs,dim_x,dim_y,1);
 }
 
-static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wires) {
+static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wires, int random_prob) {
     // Find better cost for each wire
     for (int i = 0; i < num_wires; i++) {
         int numBends = wires[i].numBends;
@@ -257,7 +257,7 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         int h_or_v = rand() % 2;
         int randomProb = rand() % 100;
         // Replace best wire with random wire
-        if (randomProb < 10) {
+        if (randomProb < random_prob) {
             wire_t randomWire = (h_or_v) ? hWire : vWire;
             updateCosts(oldWire,randomWire,costs, dim_x, dim_y);
             wires[i] = randomWire;
@@ -327,10 +327,6 @@ int main(int argc, const char *argv[]) {
     /* Conduct initial wire placement */
     initialize(wires,costs,dim_x,dim_y,num_of_wires);
 
-    for(int i=0;i<5;i++){
-        update(wires,costs,dim_x,dim_y,num_of_wires);
-    }
-
     init_time += duration_cast<dsec>(Clock::now() - init_start).count();
     printf("Initialization Time: %lf.\n", init_time);
 
@@ -343,9 +339,9 @@ int main(int argc, const char *argv[]) {
      * Don't use global variables.
      * Use OpenMP to parallelize the algorithm.
      */
-    // for (int i = 0; i < SA_iters; i++) {
-    //     update(wires, costs, dim_x, dim_y, num_of_wires);
-    // }
+    for (int i = 0; i < SA_iters; i++) {
+        update(wires, costs, dim_x, dim_y, num_of_wires, (int)(SA_prob*100));
+    }
     compute_time += duration_cast<dsec>(Clock::now() - compute_start).count();
     printf("Computation Time: %lf.\n", compute_time);
 
