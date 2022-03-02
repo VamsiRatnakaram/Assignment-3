@@ -53,60 +53,60 @@ static void show_help(const char *program_path) {
     printf("\t-i <SA_iters>\n");
 }
 
-static void initialize(wire_t *wires, int *costs, int dim_x,int dim_y,int num_wires) {
-    for (int i = 0; i < num_wires; i++){
-        wire_t *cur = &wires[i];
-        if(cur->start_x==cur->end_x || cur->start_y==cur->end_y){
-            cur->numBends=0;
-        }else{
-            cur->numBends=1;
-            cur->bend[0].x = cur->end_x;
-            cur->bend[0].y = cur->start_y;
-        }
-        wire_t curr=wires[i];
-        int start_x = curr.start_x;
-        int start_y = curr.start_y;
+static void update_route(wire_t wire,int *costs,int dim_x,int dim_y,int updateVal){
+        int start_x = wire.start_x;
+        int start_y = wire.start_y;
         int end_x,end_y;
-        for(int i=0; i < curr.numBends+1; i++){
-            if(i==curr.numBends){
-                end_x=curr.end_x;
-                end_y=curr.end_y;
+        for(int i=0; i < wire.numBends+1; i++){
+            if(i==wire.numBends){
+                end_x=wire.end_x;
+                end_y=wire.end_y;
             }else{
-                end_x=curr.bend[i].x;
-                end_y=curr.bend[i].y;
-            }
-            for(int i = min(start_x,end_x); i < max(end_x,start_x)+1; i++){
-                for(int j = min(start_y,end_y); j < max(end_y,start_y)+1; j++){
-                    costs[i*dim_y+j]+=1;
-                }
+                end_x=wire.bend[i].x;
+                end_y=wire.bend[i].y;
             }
             if(start_x==end_x){
+                for(int j = min(start_y,end_y); j < max(end_y,start_y)+1; j++){
+                    if (i>0 && wire.bend[i-1].y==j){
+                        continue;
+                    }
+                    costs[j*dim_y+start_x]+=updateVal;
+                } 
                 start_y=end_y;
-                if(end_x<curr.end_x){
-                    start_x=end_x+1;
-                }else{
-                    start_x=end_x-1;
-                }
             }else{
-                start_x=end_x;
-                if(end_y<curr.end_y){
-                    start_y=end_y+1;
-                }else{
-                    start_y=end_y-1;
+                for(int k = min(start_x,end_x); k < max(end_x,start_x)+1; k++){
+                    if (i>0 && wire.bend[i-1].x==k){
+                        continue;
+                    }
+                    costs[start_y*dim_y+k]+=updateVal;
                 }
+                start_x=end_x;
             }
         }
+}
+
+static void initialize(wire_t *wires, int *costs, int dim_x,int dim_y,int num_wires) {
+    //looks messy maybe optimize
+    for (int i = 0; i < num_wires; i++){
+        wire_t *init_wire = &wires[i];
+        if(init_wire->start_x==init_wire->end_x || init_wire->start_y==init_wire->end_y){
+            init_wire->numBends=0;
+        }else{
+            init_wire->numBends=1;
+            init_wire->bend[0].x = init_wire->end_x;
+            init_wire->bend[0].y = init_wire->start_y;
+        }
+        update_route(*init_wire,costs,dim_x,dim_y,1);
     }
 }
 
-static total_cost_t calculateCost(wire_t* wires,int index, int *costs, int dim_x, int dim_y) {
+static total_cost_t calculateCost(wire_t curr, int *costs, int dim_x, int dim_y) {
     int cost=0;
     int maxVal=0;
-    wire_t curr= wires[index];
     int start_x=curr.start_x;
     int start_y=curr.start_y;
     int end_x,end_y;
-    for(int i=0;i<curr.numBends+1;i++){
+    for(int i=0; i < curr.numBends+1; i++){
         if(i==curr.numBends){
             end_x=curr.end_x;
             end_y=curr.end_y;
@@ -114,15 +114,27 @@ static total_cost_t calculateCost(wire_t* wires,int index, int *costs, int dim_x
             end_x=curr.bend[i].x;
             end_y=curr.bend[i].y;
         }
-        for(int i = min(start_x,end_x); i < max(end_x,start_x)+1; i++){
+        if(start_x==end_x){
             for(int j = min(start_y,end_y); j < max(end_y,start_y)+1; j++){
-                int curr_cost=costs[i*dim_y+j];
-                cost+=curr_cost;
-                maxVal=max(maxVal,curr_cost);
+                if (i>0 && curr.bend[i-1].y==j){
+                    continue;
+                }
+                int currCost=costs[j*dim_y+start_x];
+                cost+=currCost;
+                maxVal=max(maxVal,currCost);
+            } 
+            start_y=end_y;
+        }else{
+            for(int k = min(start_x,end_x); k < max(end_x,start_x)+1; k++){
+                if (i>0 && curr.bend[i-1].x==k){
+                    continue;
+                }
+                int currCost=costs[start_y*dim_y+k];
+                cost+=currCost;
+                maxVal=max(maxVal,currCost);
             }
+            start_x=end_x;
         }
-        start_x=end_x;
-        start_y=end_y;
     }
     total_cost_t total_cost;
     total_cost.cost=cost;
@@ -132,50 +144,11 @@ static total_cost_t calculateCost(wire_t* wires,int index, int *costs, int dim_x
 
 static void updateCosts(wire_t old_wire, wire_t new_wire, int *costs,int dim_x, int dim_y) {
     //removing costs of the old wire
-    wire_t curr= old_wire;
-    int start_x=curr.start_x;
-    int start_y=curr.start_y;
-    int end_x,end_y;
-    for(int i=0;i<curr.numBends+1;i++){
-        if(i==curr.numBends){
-            end_x=curr.end_x;
-            end_y=curr.end_y;
-        }else{
-            end_x=curr.bend[i].x;
-            end_y=curr.bend[i].y;
-        }
-        for(int i = min(start_x,end_x); i < max(end_x,start_x)+1; i++){
-            for(int j = min(start_y,end_y); j < max(end_y,start_y)+1; j++){
-                costs[i*dim_y+j]-=1;
-            }
-        }
-        start_x=end_x;
-        start_y=end_y;
-    }
-    //updating costs for new route
-    curr= new_wire;
-    start_x=curr.start_x;
-    start_y=curr.start_y;
-    for(int i=0;i<curr.numBends+1;i++){
-        if(i==curr.numBends){
-            end_x=curr.end_x;
-            end_y=curr.end_y;
-        }else{
-            end_x=curr.bend[i].x;
-            end_y=curr.bend[i].y;
-        }
-        for(int i = min(start_x,end_x); i < max(end_x,start_x)+1; i++){
-            for(int j = min(start_y,end_y); j < max(end_y,start_y)+1; j++){
-            costs[i*dim_y+j]+=1;
-            }
-        }
-        start_x=end_x;
-        start_y=end_y;
-    }
+    update_route(old_wire,costs,dim_x,dim_y,-1);
+    update_route(new_wire,costs,dim_x,dim_y,1);
 }
 
 static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wires) {
-
     // Find better cost for each wire
     for (int i = 0; i < num_wires; i++) {
         int numBends = wires[i].numBends;
@@ -189,7 +162,11 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         int start_y = oldWire.start_y;
         int end_x = oldWire.end_x;
         int end_y = oldWire.end_y;
-        total_cost_t currCost = calculateCost(wires, i, costs, dim_x, dim_y);
+        newWire.start_x=start_x;
+        newWire.start_y=start_y;
+        newWire.end_x=end_x;
+        newWire.end_y=end_y;
+        total_cost_t currCost = calculateCost(oldWire,costs, dim_x, dim_y);
         int sign_x=1,sign_y=1;
         if(start_x > end_x){
             sign_x=-1;
@@ -202,7 +179,7 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         for (int j = 0; j < abs(end_x - start_x); j++) {
             newWire.bend[0].x = start_x + sign_x*(j + 1);
             newWire.bend[0].y = start_y;
-            if (start_x + j + 1 == end_x) {
+            if (start_x + sign_x*(j + 1)== end_x) {
                 // One Bend Case
                 newWire.numBends = 1;
             }
@@ -212,11 +189,9 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                 newWire.bend[1].y = end_y;
                 newWire.numBends = 2;
             }
-
             // Check if newWire is better than oldWire and replace if so
             updateCosts(oldWire, newWire, costs, dim_x, dim_y);
-            total_cost_t newCost = calculateCost(wires, i, costs, dim_x, dim_y);
-
+            total_cost_t newCost = calculateCost(newWire,costs, dim_x, dim_y);
             if(newCost.maxValue < currCost.maxValue){
                 currCost = newCost;
                 oldWire = newWire;
@@ -227,7 +202,6 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                 updateCosts(newWire, oldWire, costs, dim_x, dim_y);
             }
         } 
-
         // Check Vertical First Paths
         for (int j = 0; j < abs(end_y - start_y); j++) {
             newWire.bend[0].y = start_y + sign_y*(j + 1);
@@ -242,11 +216,9 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                 newWire.bend[1].x = end_x;
                 newWire.numBends = 2;
             }
-
             // Check if newWire is better than oldWire and replace if so
             updateCosts(oldWire, newWire, costs, dim_x, dim_y);
-            total_cost_t newCost = calculateCost(wires, i, costs, dim_x, dim_y);
-
+            total_cost_t newCost = calculateCost(newWire, costs, dim_x, dim_y);
             if(newCost.maxValue < currCost.maxValue){
                 currCost = newCost;
                 oldWire = newWire;
@@ -257,7 +229,6 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                 updateCosts(newWire, oldWire, costs, dim_x, dim_y);
             }
         }
-
         // Create Random Path
         // Horizontal first
         wire_t hWire = oldWire;
@@ -271,7 +242,6 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
             hWire.bend[1].x = hWire.bend[0].x;
             hWire.bend[1].y = end_y;
         }
-
         // Vertical First
         wire_t vWire = oldWire;
         vWire.bend[0].y = (rand() % (abs(end_y-start_y)))*sign_y + start_y;
@@ -284,13 +254,15 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
             vWire.bend[1].y = vWire.bend[0].y;
             vWire.bend[1].x = end_x;
         }
-
         int h_or_v = rand() % 2;
-        int annealP = rand() % 100;
+        int randomProb = rand() % 100;
         // Replace best wire with random wire
-        if (annealP < 10) {
-            newWire = (h_or_v) ? hWire : vWire;
-            updateCosts(oldWire, newWire, costs, dim_x, dim_y);
+        if (randomProb < 10) {
+            wire_t randomWire = (h_or_v) ? hWire : vWire;
+            updateCosts(oldWire,randomWire,costs, dim_x, dim_y);
+            wires[i] = randomWire;
+        }else{
+            wires[i] = oldWire;
         }
     }
 }
@@ -355,6 +327,10 @@ int main(int argc, const char *argv[]) {
     /* Conduct initial wire placement */
     initialize(wires,costs,dim_x,dim_y,num_of_wires);
 
+    for(int i=0;i<5;i++){
+        update(wires,costs,dim_x,dim_y,num_of_wires);
+    }
+
     init_time += duration_cast<dsec>(Clock::now() - init_start).count();
     printf("Initialization Time: %lf.\n", init_time);
 
@@ -370,7 +346,6 @@ int main(int argc, const char *argv[]) {
     // for (int i = 0; i < SA_iters; i++) {
     //     update(wires, costs, dim_x, dim_y, num_of_wires);
     // }
-
     compute_time += duration_cast<dsec>(Clock::now() - compute_start).count();
     printf("Computation Time: %lf.\n", compute_time);
 
@@ -408,7 +383,7 @@ int main(int argc, const char *argv[]) {
     fprintf(costFile, "%d %d\n", dim_x, dim_y);
     for(int i = 0; i < dim_y; i++){
         for(int j = 0; j < dim_x; j++){
-            fprintf(costFile, "%d ", costs[i*dim_x+j]);
+            fprintf(costFile, "%d ", costs[i*dim_y+j]);
         }
         fprintf(costFile, "\n");
     }
@@ -430,37 +405,20 @@ int main(int argc, const char *argv[]) {
                 end_y=curr.bend[i].y;
             }
             if(start_x==end_x){
-                int sign;
-                if(start_y<end_y){
-                    sign=1;
-                }else{
-                    sign=-1;
-                }
+                int sign = start_y < end_y ? 1 : -1;
                 for(int j = 0; j < abs(end_y-start_y)+1; j++){
+                    if(i>0 && j==0) continue;
                     fprintf(outFile, "%d %d ", start_x, start_y+j*(sign));
                 }
                 start_y=end_y;
-                if(end_x<curr.end_x){
-                    start_x=end_x+1;
-                }else{
-                    start_x=end_x-1;
-                }
             }else{
-                int sign;
-                if(start_x<end_x){
-                    sign=1;
-                }else{
-                    sign=-1;
-                }
+                int sign = start_x < end_x ? 1 : -1;
                 for(int j = 0; j < abs(end_x-start_x)+1; j++){
+                    if(i>0 && j==0) continue;
                     fprintf(outFile, "%d %d ", start_x+j*(sign),start_y);
                 }
                 start_x=end_x;
-                if(end_y<curr.end_y){
-                    start_y=end_y+1;
-                }else{
-                    start_y=end_y-1;
-                }
+
             }
         }
         fprintf(outFile, "\n");
