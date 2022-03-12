@@ -53,6 +53,7 @@ static void show_help(const char *program_path) {
     printf("\t-i <SA_iters>\n");
 }
 
+//update val is either 1,-1
 static void update_route(wire_t wire,int *costs,int dim_x,int dim_y,int updateVal){
         int start_x = wire.start_x;
         int start_y = wire.start_y;
@@ -106,6 +107,7 @@ static total_cost_t calculateCost(wire_t curr, int *costs, int dim_x, int dim_y)
     int start_x=curr.start_x;
     int start_y=curr.start_y;
     int end_x,end_y;
+    int currCost;
     for(int i=0; i < curr.numBends+1; i++){
         if(i==curr.numBends){
             end_x=curr.end_x;
@@ -119,9 +121,8 @@ static total_cost_t calculateCost(wire_t curr, int *costs, int dim_x, int dim_y)
                 if (i>0 && curr.bend[i-1].y==j){
                     continue;
                 }
-                int currCost=costs[j*dim_y+start_x];
-                cost+=currCost;
-                maxVal=max(maxVal,currCost);
+                currCost=costs[j*dim_y+start_x];
+            
             } 
             start_y=end_y;
         }else{
@@ -129,12 +130,12 @@ static total_cost_t calculateCost(wire_t curr, int *costs, int dim_x, int dim_y)
                 if (i>0 && curr.bend[i-1].x==k){
                     continue;
                 }
-                int currCost=costs[start_y*dim_y+k];
-                cost+=currCost;
-                maxVal=max(maxVal,currCost);
+                currCost=costs[start_y*dim_y+k];
             }
             start_x=end_x;
         }
+        cost+=currCost;
+        maxVal=max(maxVal,currCost);
     }
     total_cost_t total_cost;
     total_cost.cost=cost;
@@ -155,18 +156,17 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         if (numBends == 0) {
             continue;
         }
+
         // Wires we are modifying
         wire_t oldWire = wires[i];
-        wire_t newWire;
         int start_x = oldWire.start_x;
         int start_y = oldWire.start_y;
         int end_x = oldWire.end_x;
         int end_y = oldWire.end_y;
-        newWire.start_x=start_x;
-        newWire.start_y=start_y;
-        newWire.end_x=end_x;
-        newWire.end_y=end_y;
         total_cost_t currCost = calculateCost(oldWire,costs, dim_x, dim_y);
+        int xDist = abs(start_x - end_x);
+        int yDist = abs(start_y - end_y);
+
         int sign_x=1,sign_y=1;
         if(start_x > end_x){
             sign_x=-1;
@@ -174,61 +174,141 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         if(start_y > end_y){
             sign_y=-1;
         }
-        
-        // Check Horizontal First Paths
-        for (int j = 0; j < abs(end_x - start_x); j++) {
-            newWire.bend[0].x = start_x + sign_x*(j + 1);
-            newWire.bend[0].y = start_y;
-            if (start_x + sign_x*(j + 1)== end_x) {
-                // One Bend Case
-                newWire.numBends = 1;
+
+        int threadCount = omp_get_num_threads();
+        cost_t *subsetCostsArray = (cost_t *)calloc(xDist * yDist * threadCount, sizeof(cost_t));
+        wire_t threadWireArray[threadCount];
+        #pragma omp parallel //private(subsetCosts, oldWireRel, newWireRel, tempOldWire)
+        {
+            // Initialize sub-set of cost matrix
+            int threadNum = omp_get_thread_num();
+            cost_t *subsetCosts = &subsetCostsArray[threadNum * xDist * yDist];
+    
+            // Create Relative copies of our wires to their bounding box
+            wire_t oldWireRel, newWireRel;
+            int boundingTopCornerX = start_x, boundingTopCornerY = start_y; // Top Corners of Bounding Box
+            oldWireRel.start_x = 0;
+            oldWireRel.end_x = xDist;
+            oldWireRel.start_y = 0;
+            oldWireRel.end_y = yDist;
+            if(sign_x == -1){
+                oldWireRel.start_x = xDist;
+                oldWireRel.end_x = 0;
+                boundingTopCornerX = start_x - xDist;
             }
-            else {
-                // Two Bend Case
-                newWire.bend[1].x = start_x +sign_x*(j + 1);
-                newWire.bend[1].y = end_y;
-                newWire.numBends = 2;
+            if(sign_y == -1){
+                oldWireRel.start_x = yDist;
+                oldWireRel.end_x = 0;
+                boundingTopCornerY = start_y - yDist;
             }
+            // Get relative start_x and start_y
+            int rel_start_x = oldWireRel.start_x;
+            int rel_start_y = oldWireRel.start_y;
+            int rel_end_x = oldWireRel.end_x;
+            int rel_end_y = oldWireRel.end_y;
+
+            // Copy over costs array into local copy
+            for (int h = 0; h < xDist; h++) {
+                for (int g = 0; g < yDist; g++) {
+                    subsetCosts[g*yDist+h] = costs[(boundingTopCornerY+g)*dim_y + (boundingTopCornerX+h)];
+                }
+            }
+            
+
+            // Check Horizontal First Paths
+            #pragma omp for
+            for (int j = 0; j < xDist; j++) {
+                newWireRel.bend[0].x = rel_start_x + sign_x*(j + 1);
+                newWireRel.bend[0].y = rel_start_y;
+                if (rel_start_x + sign_x*(j + 1) == rel_end_x) {
+                    // One Bend Case
+                    newWireRel.numBends = 1;
+                }
+                else {
+                    // Two Bend Case
+                    newWireRel.bend[1].x = rel_start_x + sign_x*(j + 1);
+                    newWireRel.bend[1].y = rel_end_y;
+                    newWireRel.numBends = 2;
+                }
+                // Check if newWire is better than oldWire and replace if so
+                updateCosts(oldWireRel, newWireRel, subsetCosts, xDist+1, yDist+1);
+                total_cost_t newCost = calculateCost(newWireRel, subsetCosts, xDist+1, yDist+1);
+                if(newCost.maxValue < currCost.maxValue){
+                    currCost = newCost;
+                    oldWireRel = newWireRel;
+                }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
+                    currCost = newCost;
+                    oldWireRel = newWireRel;
+                }else {
+                    updateCosts(newWireRel, oldWireRel, subsetCosts, xDist+1, yDist+1);
+                }
+            }
+ 
+            // Check Vertical First Paths
+            #pragma omp for
+            for (int j = 0; j < yDist; j++) {
+                newWireRel.bend[0].y = rel_start_y + sign_y*(j + 1);
+                newWireRel.bend[0].x = rel_start_x;
+                if (rel_start_y + sign_y*(j + 1) == rel_end_y) {
+                    // One Bend Case
+                    newWireRel.numBends = 1;
+                }
+                else {
+                    // Two Bend Case
+                    newWireRel.bend[1].y = rel_start_y + sign_y*(j + 1);
+                    newWireRel.bend[1].x = rel_end_x;
+                    newWireRel.numBends = 2;
+                }
+                // Check if newWire is better than oldWire and replace if so
+                updateCosts(oldWireRel, newWireRel, subsetCosts, xDist + 1, yDist + 1);
+                total_cost_t newCost = calculateCost(newWireRel, subsetCosts, xDist + 1, yDist + 1);
+                if(newCost.maxValue < currCost.maxValue){
+                    currCost = newCost;
+                    oldWireRel = newWireRel;
+                }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
+                    currCost = newCost;
+                    oldWireRel = newWireRel;
+                }else {
+                    updateCosts(newWireRel, oldWireRel, subsetCosts, xDist + 1, yDist + 1);
+                }
+            }
+
+            // Return wire to real values
+            wire_t tempOldWire;
+            tempOldWire = oldWire;
+            tempOldWire.numBends = oldWireRel.numBends;
+            if (tempOldWire.numBends == 1) {
+                tempOldWire.bend[0].x = tempOldWire.start_x + sign_x*(oldWireRel.bend[0].x);
+                tempOldWire.bend[0].y = tempOldWire.start_y + sign_y*(oldWireRel.bend[0].y);
+            }
+            else if (oldWire.numBends == 2) {
+                tempOldWire.bend[0].x = tempOldWire.start_x + sign_x*(oldWireRel.bend[0].x);
+                tempOldWire.bend[0].y = tempOldWire.start_y + sign_y*(oldWireRel.bend[0].y);
+                tempOldWire.bend[1].x = tempOldWire.start_x + sign_x*(oldWireRel.bend[1].x);
+                tempOldWire.bend[1].y = tempOldWire.start_y + sign_y*(oldWireRel.bend[1].y);
+            }
+
+            threadWireArray[threadNum] = tempOldWire;
+            #pragma omp barrier
+        }
+        // Exit Parallel
+
+        // Sequential determine best wire canidate out of potential thread candidates
+        for (int k = 0; k < threadCount; k++) {
             // Check if newWire is better than oldWire and replace if so
-            updateCosts(oldWire, newWire, costs, dim_x, dim_y);
-            total_cost_t newCost = calculateCost(newWire,costs, dim_x, dim_y);
+            updateCosts(oldWire, threadWireArray[k], costs, dim_x, dim_y);
+            total_cost_t newCost = calculateCost(threadWireArray[k], costs, dim_x, dim_y);
             if(newCost.maxValue < currCost.maxValue){
                 currCost = newCost;
-                oldWire = newWire;
+                oldWire = threadWireArray[k];
             }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
                 currCost = newCost;
-                oldWire = newWire;
+                oldWire = threadWireArray[k];
             }else {
-                updateCosts(newWire, oldWire, costs, dim_x, dim_y);
-            }
-        } 
-        // Check Vertical First Paths
-        for (int j = 0; j < abs(end_y - start_y); j++) {
-            newWire.bend[0].y = start_y + sign_y*(j + 1);
-            newWire.bend[0].x = start_x;
-            if (start_y + j + 1 == end_y) {
-                // One Bend Case
-                newWire.numBends = 1;
-            }
-            else {
-                // Two Bend Case
-                newWire.bend[1].y = start_y + sign_y*(j + 1);
-                newWire.bend[1].x = end_x;
-                newWire.numBends = 2;
-            }
-            // Check if newWire is better than oldWire and replace if so
-            updateCosts(oldWire, newWire, costs, dim_x, dim_y);
-            total_cost_t newCost = calculateCost(newWire, costs, dim_x, dim_y);
-            if(newCost.maxValue < currCost.maxValue){
-                currCost = newCost;
-                oldWire = newWire;
-            }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
-                currCost = newCost;
-                oldWire = newWire;
-            }else {
-                updateCosts(newWire, oldWire, costs, dim_x, dim_y);
+                updateCosts(threadWireArray[k], oldWire, costs, dim_x, dim_y);
             }
         }
+
         // Create Random Path
         // Horizontal first
         wire_t hWire = oldWire;
@@ -339,6 +419,7 @@ int main(int argc, const char *argv[]) {
      * Don't use global variables.
      * Use OpenMP to parallelize the algorithm.
      */
+    omp_set_num_threads(num_of_threads);
     for (int i = 0; i < SA_iters; i++) {
         update(wires, costs, dim_x, dim_y, num_of_wires, (int)(SA_prob*100));
     }
