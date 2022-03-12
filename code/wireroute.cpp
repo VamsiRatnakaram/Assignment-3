@@ -106,6 +106,7 @@ static total_cost_t calculateCost(wire_t curr, int *costs, int dim_x, int dim_y)
     int start_x=curr.start_x;
     int start_y=curr.start_y;
     int end_x,end_y;
+    int currCost = 0;
     for(int i=0; i < curr.numBends+1; i++){
         if(i==curr.numBends){
             end_x=curr.end_x;
@@ -119,9 +120,7 @@ static total_cost_t calculateCost(wire_t curr, int *costs, int dim_x, int dim_y)
                 if (i>0 && curr.bend[i-1].y==j){
                     continue;
                 }
-                int currCost=costs[j*dim_y+start_x];
-                cost+=currCost;
-                maxVal=max(maxVal,currCost);
+                currCost=costs[j*dim_y+start_x];
             } 
             start_y=end_y;
         }else{
@@ -129,12 +128,12 @@ static total_cost_t calculateCost(wire_t curr, int *costs, int dim_x, int dim_y)
                 if (i>0 && curr.bend[i-1].x==k){
                     continue;
                 }
-                int currCost=costs[start_y*dim_y+k];
-                cost+=currCost;
-                maxVal=max(maxVal,currCost);
+                currCost=costs[start_y*dim_y+k];
             }
             start_x=end_x;
         }
+        cost+=currCost;
+        maxVal=max(maxVal,currCost);
     }
     total_cost_t total_cost;
     total_cost.cost=cost;
@@ -206,7 +205,7 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         for (int j = 0; j < abs(end_y - start_y); j++) {
             newWire.bend[0].y = start_y + sign_y*(j + 1);
             newWire.bend[0].x = start_x;
-            if (start_y + j + 1 == end_y) {
+            if (start_y + sign_y*(j + 1) == end_y) {
                 // One Bend Case
                 newWire.numBends = 1;
             }
