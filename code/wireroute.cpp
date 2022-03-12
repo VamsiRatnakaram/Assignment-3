@@ -159,12 +159,17 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         newWire.numBends=0;
         update_route(oldWire,costs,dim_x,dim_y,-1);
         total_cost_t currCost = calculateCost(oldWire,costs, dim_x, dim_y);
+
         int sign_x=1,sign_y=1;
         if(start_x > end_x){
             sign_x=-1;
         }
         if(start_y > end_y){
             sign_y=-1;
+        }
+
+        if (currCost.maxValue == 1){
+            goto earlyExit;
         }
         
         // Check Horizontal First Paths
@@ -185,10 +190,13 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
             total_cost_t newCost = calculateCost(newWire,costs, dim_x, dim_y);
             if(newCost.maxValue < currCost.maxValue){
                 currCost = newCost;
-                bestWire=newWire;
+                bestWire = newWire;
             }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
                 currCost = newCost;
-                bestWire=newWire;
+                bestWire = newWire;
+            }
+            if (currCost.maxValue == 1){
+                goto earlyExit;
             }
         } 
         // Check Vertical First Paths
@@ -214,9 +222,13 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                 currCost = newCost;
                 bestWire=newWire;
             }
+            if (currCost.maxValue == 1){
+                goto earlyExit;
+            }
         }
         // Create Random Path
         // Horizontal first
+        earlyExit: 
         wire_t hWire = oldWire;
         hWire.bend[0].x = (rand() % (abs(end_x-start_x)))*sign_x + start_x;
         hWire.bend[0].y = start_y;
