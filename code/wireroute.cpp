@@ -120,7 +120,7 @@ static total_cost_t calculateCost(wire_t curr, int *costs, int dim_x, int dim_y)
                 if (i>0 && curr.bend[i-1].y==j){
                     continue;
                 }
-                currCost=costs[j*dim_y+start_x];
+                currCost=costs[j*dim_y+start_x]+1;
             } 
             start_y=end_y;
         }else{
@@ -128,7 +128,7 @@ static total_cost_t calculateCost(wire_t curr, int *costs, int dim_x, int dim_y)
                 if (i>0 && curr.bend[i-1].x==k){
                     continue;
                 }
-                currCost=costs[start_y*dim_y+k];
+                currCost=costs[start_y*dim_y+k]+1;
             }
             start_x=end_x;
         }
@@ -141,12 +141,6 @@ static total_cost_t calculateCost(wire_t curr, int *costs, int dim_x, int dim_y)
     return total_cost;
 }
 
-static void updateCosts(wire_t old_wire, wire_t new_wire, int *costs,int dim_x, int dim_y) {
-    //removing costs of the old wire
-    update_route(old_wire,costs,dim_x,dim_y,-1);
-    update_route(new_wire,costs,dim_x,dim_y,1);
-}
-
 static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wires, int random_prob) {
     // Find better cost for each wire
     for (int i = 0; i < num_wires; i++) {
@@ -156,15 +150,14 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         }
         // Wires we are modifying
         wire_t oldWire = wires[i];
-        wire_t newWire;
         int start_x = oldWire.start_x;
         int start_y = oldWire.start_y;
         int end_x = oldWire.end_x;
         int end_y = oldWire.end_y;
-        newWire.start_x=start_x;
-        newWire.start_y=start_y;
-        newWire.end_x=end_x;
-        newWire.end_y=end_y;
+        wire_t newWire = wires[i];
+        wire_t bestWire = oldWire;
+        newWire.numBends=0;
+        update_route(oldWire,costs,dim_x,dim_y,-1);
         total_cost_t currCost = calculateCost(oldWire,costs, dim_x, dim_y);
         int sign_x=1,sign_y=1;
         if(start_x > end_x){
@@ -189,16 +182,13 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                 newWire.numBends = 2;
             }
             // Check if newWire is better than oldWire and replace if so
-            updateCosts(oldWire, newWire, costs, dim_x, dim_y);
             total_cost_t newCost = calculateCost(newWire,costs, dim_x, dim_y);
             if(newCost.maxValue < currCost.maxValue){
                 currCost = newCost;
-                oldWire = newWire;
+                bestWire=newWire;
             }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
                 currCost = newCost;
-                oldWire = newWire;
-            }else {
-                updateCosts(newWire, oldWire, costs, dim_x, dim_y);
+                bestWire=newWire;
             }
         } 
         // Check Vertical First Paths
@@ -216,16 +206,13 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                 newWire.numBends = 2;
             }
             // Check if newWire is better than oldWire and replace if so
-            updateCosts(oldWire, newWire, costs, dim_x, dim_y);
             total_cost_t newCost = calculateCost(newWire, costs, dim_x, dim_y);
             if(newCost.maxValue < currCost.maxValue){
                 currCost = newCost;
-                oldWire = newWire;
+                bestWire=newWire;
             }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
                 currCost = newCost;
-                oldWire = newWire;
-            }else {
-                updateCosts(newWire, oldWire, costs, dim_x, dim_y);
+                bestWire=newWire;
             }
         }
         // Create Random Path
@@ -258,10 +245,11 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         // Replace best wire with random wire
         if (randomProb < random_prob) {
             wire_t randomWire = (h_or_v) ? hWire : vWire;
-            updateCosts(oldWire,randomWire,costs, dim_x, dim_y);
+            update_route(randomWire,costs,dim_x,dim_y,1);
             wires[i] = randomWire;
         }else{
-            wires[i] = oldWire;
+            update_route(bestWire,costs,dim_x,dim_y,1);
+            wires[i] = bestWire;
         }
     }
 }
