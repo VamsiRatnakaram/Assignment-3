@@ -166,11 +166,14 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         wire_t bestWire = oldWire;
 
         int threadCount = num_of_threads;
-        // wire_t threadBestWireArray[threadCount];
         wire_t *threadBestWireArray = (wire_t *)calloc(threadCount, sizeof(wire_t));
-        // for (int k = 0; k < threadCount; k++){
-        //     threadBestWireArray[k] = oldWire;
-        // }
+
+        //Notes
+        //sequential code at end maybe slow- try using critical section
+        //shared cost array- think of cache hits
+        //with more threads- some threads dont get any tasks because of the way assignment
+        //early termination- getting confirmed on piazza -not priority
+
         #pragma omp parallel firstprivate(bestWire)
         {
             wire_t newWire = oldWire;
