@@ -235,7 +235,7 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
             threadBestWireArray[threadNum] = bestWire;
         }
         wire_t globalBest = oldWire;
-        wire_t globalCost = calculateCost(globalBest, costs, dim_x, dim_y);
+        total_cost_t globalCost = calculateCost(globalBest, costs, dim_x, dim_y);
         for (int k = 0; k < threadCount; k++) {
             // Check if newWire is better than oldWire and replace if so
             total_cost_t newCost = calculateCost(threadBestWireArray[k], costs, dim_x, dim_y);
@@ -247,7 +247,6 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                 globalBest = threadBestWireArray[k];
             }
         }
-
 
         // Create Random Path
         // Horizontal first
