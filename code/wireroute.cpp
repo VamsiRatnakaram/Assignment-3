@@ -154,8 +154,9 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         int start_y = oldWire.start_y;
         int end_x = oldWire.end_x;
         int end_y = oldWire.end_y;
+
         update_route(oldWire,costs,dim_x,dim_y,-1);
-        total_cost_t currCost = calculateCost(oldWire, costs, dim_x, dim_y);
+
         int sign_x=1,sign_y=1;
         if(start_x > end_x){
             sign_x=-1;
@@ -163,25 +164,20 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         if(start_y > end_y){
             sign_y=-1;
         }
-        wire_t bestWire = oldWire;
 
-        int threadCount = num_of_threads;
-        // OLD CODE from prior implementation
-        // wire_t threadBestWireArray[threadCount];
-        // wire_t *threadBestWireArray = (wire_t *)calloc(threadCount, sizeof(wire_t));
-        // for (int k = 0; k < threadCount; k++){
-        //     threadBestWireArray[k] = oldWire;
-        // }
-        wire_t globalBestWire;
-        #pragma omp parallel firstprivate(bestWire)
+        total_cost_t globalCost = calculateCost(oldWire, costs, dim_x, dim_y);
+        wire_t globalBestWire = oldWire;
+
+        #pragma omp parallel
         {
+            total_cost_t currCost = calculateCost(oldWire, costs, dim_x, dim_y);
             wire_t newWire = oldWire;
+            wire_t bestWire = oldWire;
             newWire.numBends = 0;
             int threadNum = omp_get_thread_num();
             int threadCountInside = omp_get_num_threads();
 
             // Check Horizontal First Paths
-            // #pragma omp for
             for (int j = threadNum; j < abs(end_x - start_x); j+=threadCountInside) {
                 newWire.bend[0].x = start_x + sign_x*(j + 1);
                 newWire.bend[0].y = start_y;
@@ -207,7 +203,6 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
             }
 
             // Check Vertical First Paths
-            // #pragma omp for
             for (int j = threadNum; j < abs(end_y - start_y); j+=threadCountInside) {
                 newWire.bend[0].y = start_y + sign_y*(j + 1);
                 newWire.bend[0].x = start_x;
@@ -231,36 +226,19 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                     bestWire = newWire;
                 }
             }
-            // threadBestWireArray[threadNum] = bestWire; // OLD CODE from prior implementation
 
             #pragma omp critical 
             {
                 // Check if newWire is better than oldWire and replace if so
-                total_cost_t newCost = calculateCost(bestWire, costs, dim_x, dim_y);
-                if(newCost.maxValue < currCost.maxValue){
-                    currCost = newCost;
+                if(currCost.maxValue < globalCost.maxValue){
+                    globalCost = currCost;
                     globalBestWire = bestWire; 
-                }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
-                    currCost = newCost;
+                }else if (currCost.maxValue == globalCost.maxValue && currCost.cost < globalCost.cost) {
+                    globalCost = currCost;
                     globalBestWire = bestWire;
                 }
             }
-
-            #pragma omp barrier
         }
-
-        // OLD CODE from prior implementation
-        // for (int k = 0; k < threadCount; k++) {
-        //     // Check if newWire is better than oldWire and replace if so
-        //     total_cost_t newCost = calculateCost(threadBestWireArray[k], costs, dim_x, dim_y);
-        //     if(newCost.maxValue < currCost.maxValue){
-        //         currCost = newCost;
-        //         bestWire = threadBestWireArray[k];
-        //     }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
-        //         currCost = newCost;
-        //         bestWire = threadBestWireArray[k];
-        //     }
-        // }
 
         // Create Random Path
         // Horizontal first
@@ -295,8 +273,8 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
             update_route(randomWire,costs,dim_x,dim_y,1);
             wires[i] = randomWire;
         }else{
-            update_route(bestWire,costs,dim_x,dim_y,1);
-            wires[i] = bestWire;
+            update_route(globalBestWire,costs,dim_x,dim_y,1);
+            wires[i] = globalBestWire;
         }
     }
 }
