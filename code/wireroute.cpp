@@ -158,7 +158,7 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         wire_t bestWire = oldWire;
         newWire.numBends=0;
         update_route(oldWire,costs,dim_x,dim_y,-1);
-        total_cost_t currCost = calculateCost(oldWire,costs, dim_x, dim_y);
+        total_cost_t bestCost = calculateCost(oldWire,costs, dim_x, dim_y);
         int sign_x=1,sign_y=1;
         if(start_x > end_x){
             sign_x=-1;
@@ -183,12 +183,12 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
             }
             // Check if newWire is better than oldWire and replace if so
             total_cost_t newCost = calculateCost(newWire,costs, dim_x, dim_y);
-            if(newCost.maxValue < currCost.maxValue){
-                currCost = newCost;
-                bestWire=newWire;
-            }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
-                currCost = newCost;
-                bestWire=newWire;
+            if(newCost.maxValue < bestCost.maxValue){
+                bestCost = newCost;
+                bestWire = newWire;
+            }else if (newCost.maxValue == bestCost.maxValue && newCost.cost < bestCost.cost) {
+                bestCost = newCost;
+                bestWire = newWire;
             }
         } 
         // Check Vertical First Paths
@@ -207,12 +207,12 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
             }
             // Check if newWire is better than oldWire and replace if so
             total_cost_t newCost = calculateCost(newWire, costs, dim_x, dim_y);
-            if(newCost.maxValue < currCost.maxValue){
-                currCost = newCost;
-                bestWire=newWire;
-            }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
-                currCost = newCost;
-                bestWire=newWire;
+            if(newCost.maxValue < bestCost.maxValue){
+                bestCost = newCost;
+                bestWire = newWire;
+            }else if (newCost.maxValue == bestCost.maxValue && newCost.cost < bestCost.cost) {
+                bestCost = newCost;
+                bestWire = newWire;
             }
         }
         // Create Random Path
