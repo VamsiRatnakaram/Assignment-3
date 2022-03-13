@@ -170,9 +170,7 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
 
         #pragma omp parallel
         {
-            total_cost_t currCost = calculateCost(oldWire, costs, dim_x, dim_y);
             wire_t newWire = oldWire;
-            wire_t bestWire = oldWire;
             newWire.numBends = 0;
             int threadNum = omp_get_thread_num();
             int threadCountInside = omp_get_num_threads();
@@ -193,12 +191,15 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                 }
                 // Check if newWire is better than oldWire and replace if so
                 total_cost_t newCost = calculateCost(newWire, costs, dim_x, dim_y);
-                if(newCost.maxValue < currCost.maxValue){
-                    currCost = newCost;
-                    bestWire = newWire; 
-                }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
-                    currCost = newCost;
-                    bestWire = newWire; 
+                #pragma omp critical
+                {
+                    if(newCost.maxValue < globalCost.maxValue){
+                        globalCost = newCost;
+                        globalBestWire = newWire; 
+                    }else if (newCost.maxValue == globalCost.maxValue && newCost.cost < globalCost.cost) {
+                        globalCost = newCost;
+                        globalBestWire = newWire; 
+                    }
                 }
             }
 
@@ -220,12 +221,12 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                 total_cost_t newCost = calculateCost(newWire, costs, dim_x, dim_y);
                 #pragma omp critical
                 {
-                    if(newCost.maxValue < currCost.maxValue){
+                    if(newCost.maxValue < globalCost.maxValue){
                         globalCost = newCost;
                         globalBestWire = newWire; 
-                    }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
+                    }else if (newCost.maxValue == globalCost.maxValue && newCost.cost < globalCost.cost) {
                         globalCost = newCost;
-                        globalBestWire = newWire;
+                        globalBestWire = newWire; 
                     }
                 }
             }
