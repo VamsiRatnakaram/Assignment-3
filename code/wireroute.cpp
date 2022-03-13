@@ -166,11 +166,13 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
         wire_t bestWire = oldWire;
 
         int threadCount = num_of_threads;
+        // OLD CODE from prior implementation
         // wire_t threadBestWireArray[threadCount];
-        wire_t *threadBestWireArray = (wire_t *)calloc(threadCount, sizeof(wire_t));
+        // wire_t *threadBestWireArray = (wire_t *)calloc(threadCount, sizeof(wire_t));
         // for (int k = 0; k < threadCount; k++){
         //     threadBestWireArray[k] = oldWire;
         // }
+        wire_t globalBestWire;
         #pragma omp parallel firstprivate(bestWire)
         {
             wire_t newWire = oldWire;
@@ -197,10 +199,10 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                 total_cost_t newCost = calculateCost(newWire, costs, dim_x, dim_y);
                 if(newCost.maxValue < currCost.maxValue){
                     currCost = newCost;
-                    bestWire = newWire; // threadBestWireArray[threadNum] = newWire;
+                    bestWire = newWire; 
                 }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
                     currCost = newCost;
-                    bestWire = newWire; // threadBestWireArray[threadNum] = newWire;
+                    bestWire = newWire; 
                 }
             }
 
@@ -223,28 +225,42 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                 total_cost_t newCost = calculateCost(newWire, costs, dim_x, dim_y);
                 if(newCost.maxValue < currCost.maxValue){
                     currCost = newCost;
-                    bestWire = newWire; // threadBestWireArray[threadNum] = newWire;
+                    bestWire = newWire; 
                 }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
                     currCost = newCost;
-                    bestWire = newWire; // threadBestWireArray[threadNum] = newWire;
+                    bestWire = newWire;
                 }
             }
-            threadBestWireArray[threadNum] = bestWire;
+            // threadBestWireArray[threadNum] = bestWire; // OLD CODE from prior implementation
+
+            #pragma omp critical 
+            {
+                // Check if newWire is better than oldWire and replace if so
+                total_cost_t newCost = calculateCost(bestWire, costs, dim_x, dim_y);
+                if(newCost.maxValue < currCost.maxValue){
+                    currCost = newCost;
+                    globalBestWire = bestWire; 
+                }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
+                    currCost = newCost;
+                    globalBestWire = bestWire;
+                }
+            }
+
             #pragma omp barrier
         }
 
-        for (int k = 0; k < threadCount; k++) {
-            // Check if newWire is better than oldWire and replace if so
-            total_cost_t newCost = calculateCost(threadBestWireArray[k], costs, dim_x, dim_y);
-            if(newCost.maxValue < currCost.maxValue){
-                currCost = newCost;
-                bestWire = threadBestWireArray[k];
-            }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
-                currCost = newCost;
-                bestWire = threadBestWireArray[k];
-            }
-        }
-
+        // OLD CODE from prior implementation
+        // for (int k = 0; k < threadCount; k++) {
+        //     // Check if newWire is better than oldWire and replace if so
+        //     total_cost_t newCost = calculateCost(threadBestWireArray[k], costs, dim_x, dim_y);
+        //     if(newCost.maxValue < currCost.maxValue){
+        //         currCost = newCost;
+        //         bestWire = threadBestWireArray[k];
+        //     }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
+        //         currCost = newCost;
+        //         bestWire = threadBestWireArray[k];
+        //     }
+        // }
 
         // Create Random Path
         // Horizontal first
