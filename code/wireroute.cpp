@@ -228,31 +228,6 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                 }
             }
 
-            // // Check Vertical First Paths
-            // for (int j = threadNum; j < abs(end_y - start_y); j+=threadCountInside) {
-            //     newWire.bend[0].y = start_y + sign_y*(j + 1);
-            //     newWire.bend[0].x = start_x;
-            //     if (start_y + sign_y*(j + 1) == end_y) {
-            //         // One Bend Case
-            //         newWire.numBends = 1;
-            //     }
-            //     else {
-            //         // Two Bend Case
-            //         newWire.bend[1].y = start_y + sign_y*(j + 1);
-            //         newWire.bend[1].x = end_x;
-            //         newWire.numBends = 2;
-            //     }
-            //     // Check if newWire is better than oldWire and replace if so
-            //     total_cost_t newCost = calculateCost(newWire, costs, dim_x, dim_y);
-            //     if(newCost.maxValue < currCost.maxValue){
-            //         currCost = newCost;
-            //         bestWire = newWire; 
-            //     }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
-            //         currCost = newCost;
-            //         bestWire = newWire;
-            //     }
-            // }
-
             #pragma omp critical 
             {
                 // Check if newWire is better than oldWire and replace if so
