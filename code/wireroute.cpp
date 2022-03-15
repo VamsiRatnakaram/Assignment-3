@@ -174,11 +174,10 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
             wire_t newWire = oldWire;
             wire_t bestWire = oldWire;
             newWire.numBends = 0;
-            int threadNum = omp_get_thread_num();
-            int threadCountInside = omp_get_num_threads();
 
             // Check All Possible Paths
-            for (int j = threadNum; j < abs(end_x - start_x) + abs(end_y - start_y); j+=threadCountInside) {
+            #pragma omp for schedule(dynamic)
+            for (int j = 0; j < abs(end_x - start_x) + abs(end_y - start_y); j+=1) {
                 if (j < abs(end_x - start_x)) { // Horizontal Path
                     newWire.bend[0].x = start_x + sign_x*(j + 1);
                     newWire.bend[0].y = start_y;
@@ -227,31 +226,6 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
                     }
                 }
             }
-
-            // // Check Vertical First Paths
-            // for (int j = threadNum; j < abs(end_y - start_y); j+=threadCountInside) {
-            //     newWire.bend[0].y = start_y + sign_y*(j + 1);
-            //     newWire.bend[0].x = start_x;
-            //     if (start_y + sign_y*(j + 1) == end_y) {
-            //         // One Bend Case
-            //         newWire.numBends = 1;
-            //     }
-            //     else {
-            //         // Two Bend Case
-            //         newWire.bend[1].y = start_y + sign_y*(j + 1);
-            //         newWire.bend[1].x = end_x;
-            //         newWire.numBends = 2;
-            //     }
-            //     // Check if newWire is better than oldWire and replace if so
-            //     total_cost_t newCost = calculateCost(newWire, costs, dim_x, dim_y);
-            //     if(newCost.maxValue < currCost.maxValue){
-            //         currCost = newCost;
-            //         bestWire = newWire; 
-            //     }else if (newCost.maxValue == currCost.maxValue && newCost.cost < currCost.cost) {
-            //         currCost = newCost;
-            //         bestWire = newWire;
-            //     }
-            // }
 
             #pragma omp critical 
             {
