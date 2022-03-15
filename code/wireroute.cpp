@@ -176,7 +176,7 @@ static void update(wire_t *wires, int *costs, int dim_x, int dim_y, int num_wire
             newWire.numBends = 0;
 
             // Check All Possible Paths
-            #pragma omp for schedule(dynamic)
+            #pragma omp for schedule(dynamic[,2])
             for (int j = 0; j < abs(end_x - start_x) + abs(end_y - start_y); j+=1) {
                 if (j < abs(end_x - start_x)) { // Horizontal Path
                     newWire.bend[0].x = start_x + sign_x*(j + 1);
